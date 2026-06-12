@@ -2,13 +2,13 @@
 
 This project is a complete **Web Dashboard and Telegram Bot** designed to track Mac App Store reviews for a specific developer. It automatically scrapes Apple's servers for your apps, stores reviews in a local database (SQLite), provides a beautiful Web Dashboard, and keeps you updated via Telegram notifications.
 
-## 🚀 Telegram Integration (Core Feature)
+## Telegram Integration (Core Feature)
 
 One of the main strengths of this system is its deep Telegram integration, allowing you to stay connected to your user feedback from anywhere. 
 
 There are two distinct types of Telegram interactions:
 
-### 1. 🔔 Automated Push Notifications (Active)
+### 1. Automated Push Notifications (Active)
 The system runs silently in the background, checking the App Store at regular intervals (default: every hour). 
 - Whenever a **brand new review** is published for any of your apps, the bot will automatically send a **push notification** directly to your Telegram chat.
 - The notification includes the app's official icon, the star rating, the author's name, the app version, and the full text of the review.
