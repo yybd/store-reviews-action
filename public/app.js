@@ -518,6 +518,19 @@ function setupSettingsModal() {
             const dashboardPassInput = document.getElementById('dashboard-pass');
             if (dashboardUserInput) dashboardUserInput.value = data.dashboardUser || '';
             if (dashboardPassInput) dashboardPassInput.value = data.dashboardPass || '';
+
+            const pollIntervalSelect = document.getElementById('poll-interval');
+            if (pollIntervalSelect) {
+                const minutes = String(data.pollIntervalMinutes || 60);
+                // If the saved value isn't one of the presets (e.g. set via env), add it
+                if (!Array.from(pollIntervalSelect.options).some(o => o.value === minutes)) {
+                    const opt = document.createElement('option');
+                    opt.value = minutes;
+                    opt.textContent = `Every ${minutes} minutes`;
+                    pollIntervalSelect.appendChild(opt);
+                }
+                pollIntervalSelect.value = minutes;
+            }
             
             if (data.apiMode === 'private') {
                 const tabPrivate = document.getElementById('tab-private');
@@ -579,7 +592,8 @@ function setupSettingsModal() {
             const ascPrivateKeyInput = document.getElementById('asc-private-key');
             const dashboardUserInput = document.getElementById('dashboard-user');
             const dashboardPassInput = document.getElementById('dashboard-pass');
-            
+            const pollIntervalSelect = document.getElementById('poll-interval');
+
             const payload = {
                 telegramToken: tokenInput ? tokenInput.value.trim() : '',
                 telegramChatId: chatIdInput ? chatIdInput.value.trim() : '',
@@ -590,7 +604,8 @@ function setupSettingsModal() {
                 ascKeyId: ascKeyIdInput ? ascKeyIdInput.value.trim() : '',
                 ascPrivateKey: ascPrivateKeyInput ? ascPrivateKeyInput.value.trim() : '',
                 dashboardUser: dashboardUserInput ? dashboardUserInput.value.trim() : '',
-                dashboardPass: dashboardPassInput ? dashboardPassInput.value.trim() : ''
+                dashboardPass: dashboardPassInput ? dashboardPassInput.value.trim() : '',
+                pollIntervalMinutes: pollIntervalSelect ? parseInt(pollIntervalSelect.value, 10) : undefined
             };
             
             const res = await customFetch('/api/settings', {

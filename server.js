@@ -48,8 +48,40 @@ const basicAuth = (req, res, next) => {
 app.use('/api', basicAuth);
 
 const PORT = process.env.PORT || 3000;
-// Check for new reviews every hour by default (applies to both Public and Private API modes)
-const POLL_INTERVAL_MINUTES = parseInt(process.env.POLL_INTERVAL_MINUTES || '60', 10);
+
+// How often to check for new reviews (applies to both Public and Private API modes).
+// Configured from the Settings UI and stored in the DB; the env var is only an
+// optional deployment fallback for when nothing was set in the UI yet.
+const DEFAULT_POLL_MINUTES = 60;
+const MIN_POLL_MINUTES = 5;
+const MAX_POLL_MINUTES = 1440;
+
+async function getPollIntervalMinutes() {
+  const fromDb = parseInt(await db.getSetting('poll_interval_minutes'), 10);
+  if (Number.isFinite(fromDb) && fromDb >= MIN_POLL_MINUTES && fromDb <= MAX_POLL_MINUTES) return fromDb;
+  const fromEnv = parseInt(process.env.POLL_INTERVAL_MINUTES, 10);
+  if (Number.isFinite(fromEnv) && fromEnv >= MIN_POLL_MINUTES && fromEnv <= MAX_POLL_MINUTES) return fromEnv;
+  return DEFAULT_POLL_MINUTES;
+}
+
+// Self-rescheduling timer (instead of a fixed setInterval) so a new interval
+// saved in the Settings UI takes effect immediately, without a server restart
+let pollTimer = null;
+async function schedulePolling() {
+  const minutes = await getPollIntervalMinutes();
+  // Clear and set back-to-back (after the await) so concurrent calls can never
+  // leave two live timers behind
+  if (pollTimer) clearTimeout(pollTimer);
+  console.log(`Next review check in ${minutes} minutes.`);
+  pollTimer = setTimeout(async () => {
+    try {
+      await scrapeReviews();
+    } catch (e) {
+      console.error('Scheduled scrape failed:', e);
+    }
+    schedulePolling();
+  }, minutes * 60 * 1000);
+}
 
 // Initialize Telegram bot from DB settings
 setTimeout(async () => {
@@ -121,7 +153,8 @@ app.get('/api/settings', async (req, res) => {
       ascKeyId,
       ascPrivateKey,
       dashboardUser,
-      dashboardPass
+      dashboardPass,
+      pollIntervalMinutes: await getPollIntervalMinutes()
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch settings' });
@@ -143,7 +176,7 @@ const normalizePrivateKey = (rawKey) => {
 };
 
 app.post('/api/settings', async (req, res) => {
-  const { telegramToken, telegramChatId, developerName, storeCountries, apiMode, ascIssuerId, ascKeyId, ascPrivateKey, dashboardUser, dashboardPass } = req.body;
+  const { telegramToken, telegramChatId, developerName, storeCountries, apiMode, ascIssuerId, ascKeyId, ascPrivateKey, dashboardUser, dashboardPass, pollIntervalMinutes } = req.body;
 
   try {
     // Load current values: needed to resolve "keep current" sentinels and to detect changes
@@ -171,6 +204,16 @@ app.post('/api/settings', async (req, res) => {
     let newAscKey = oldAscKey;
     if (ascPrivateKey && ascPrivateKey !== HIDDEN) {
       newAscKey = normalizePrivateKey(ascPrivateKey);
+    }
+
+    // Validate the polling interval (absent means "keep current")
+    let newPollInterval = null;
+    if (pollIntervalMinutes !== undefined) {
+      const n = parseInt(pollIntervalMinutes, 10);
+      if (!Number.isFinite(n) || n < MIN_POLL_MINUTES || n > MAX_POLL_MINUTES) {
+        return res.status(400).json({ success: false, error: `Check interval must be between ${MIN_POLL_MINUTES} and ${MAX_POLL_MINUTES} minutes` });
+      }
+      newPollInterval = n;
     }
 
     // Resolve dashboard credentials (validation only at this stage — nothing is written yet)
@@ -216,6 +259,14 @@ app.post('/api/settings', async (req, res) => {
     await db.setSetting('asc_issuer_id', newAscIssuerId);
     await db.setSetting('asc_key_id', newAscKeyId);
     await db.setSetting('asc_private_key', newAscKey);
+
+    if (newPollInterval !== null) {
+      const oldPollInterval = await getPollIntervalMinutes();
+      await db.setSetting('poll_interval_minutes', String(newPollInterval));
+      if (newPollInterval !== oldPollInterval) {
+        schedulePolling().catch(err => console.error('Failed to reschedule polling:', err));
+      }
+    }
 
     // Re-initialize bot only if telegram credentials changed
     if (newTelegramToken !== oldTelegramToken || newTelegramChatId !== oldTelegramChatId) {
@@ -329,14 +380,10 @@ app.get('/api/reviews', (req, res) => {
 
 setTimeout(() => {
   scrapeReviews(true);
+  // Start the recurring check (covers both Public RSS and Private ASC API modes)
+  schedulePolling().catch(err => console.error('Failed to schedule polling:', err));
 }, 2000); // Wait 2s to ensure DB is initialized
-
-// Setup polling interval (covers both Public RSS and Private ASC API modes)
-setInterval(() => {
-  scrapeReviews();
-}, POLL_INTERVAL_MINUTES * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
-  console.log(`Polling interval set to ${POLL_INTERVAL_MINUTES} minutes.`);
 });

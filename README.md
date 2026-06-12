@@ -45,7 +45,7 @@ One of the main strengths of this system is its deep Telegram integration, allow
 There are two distinct types of Telegram interactions:
 
 ### 1. Automated Push Notifications (Active)
-The system runs silently in the background, checking the App Store at regular intervals (default: every hour). 
+The system runs silently in the background, checking the App Store at regular intervals (default: every hour — configurable from the Settings window, and applies to both Public and Private API modes). 
 - Whenever a **brand new review** is published for any of your apps, the bot will automatically send a **push notification** directly to your Telegram chat.
 - The notification includes the app's official icon, the star rating, the author's name, the app version, and the full text of the review.
 - You do not need to do anything to trigger this; it happens entirely automatically.

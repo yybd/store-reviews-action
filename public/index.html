@@ -112,7 +112,7 @@
                 <!-- Telegram Tab Content -->
                 <div id="content-telegram" class="tab-content" style="display: none;">
                     <p style="margin-top: 0; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 16px;">
-                        Configure Telegram to receive <strong>automatic push notifications</strong> whenever a new review is published. The store is checked every hour (for both Public and Private API modes).
+                        Configure Telegram to receive <strong>automatic push notifications</strong> whenever a new review is published. The store is checked automatically on the interval set below (default: every hour, for both Public and Private API modes).
                     </p>
 
                     <div class="form-group">
@@ -149,6 +149,20 @@
                     <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 12px; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px;">
                         🔒 <strong>Note:</strong> Your credentials will be saved locally to <code>auth.json</code> in the project directory. If you forget your password, you can simply open this file on your server to recover it, or delete it to remove the password protection entirely.
                     </div>
+                </div>
+
+                <!-- General: applies to both Public and Private API modes -->
+                <div class="form-group" style="border-top: 1px solid var(--card-border); margin-top: 16px; padding-top: 16px;">
+                    <label for="poll-interval">Check for New Reviews</label>
+                    <select id="poll-interval" style="width: 100%; padding: 12px; border: 1px solid var(--card-border); border-radius: 8px; font-size: 1rem; background-color: var(--surface-color); color: var(--text-primary);">
+                        <option value="15">Every 15 minutes</option>
+                        <option value="30">Every 30 minutes</option>
+                        <option value="60">Every hour (recommended)</option>
+                        <option value="120">Every 2 hours</option>
+                        <option value="360">Every 6 hours</option>
+                        <option value="720">Every 12 hours</option>
+                        <option value="1440">Once a day</option>
+                    </select>
                 </div>
             </div>
             <div class="modal-footer">
