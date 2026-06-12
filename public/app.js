@@ -28,12 +28,17 @@ async function fetchConfig() {
             
             statusHtml += `<span style="margin: 0 6px; color: #cbd5e1;">|</span>`;
             
+            const testBtn = document.getElementById('test-telegram-btn');
             if (config.telegramConnected) {
                 statusHtml += `<span style="color: #4ade80;" title="Telegram Connected">●</span> Telegram`;
+                if (testBtn) {
+                    testBtn.disabled = false;
+                    testBtn.style.opacity = '1';
+                    testBtn.style.cursor = 'pointer';
+                    testBtn.title = 'Send an instant summary to Telegram';
+                }
             } else {
                 statusHtml += `<span style="color: #ff5e5e;" title="Telegram Disconnected">●</span> Telegram`;
-                
-                const testBtn = document.getElementById('test-telegram-btn');
                 if (testBtn) {
                     testBtn.disabled = true;
                     testBtn.style.opacity = '0.5';

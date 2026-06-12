@@ -62,12 +62,24 @@ app.get('/api/settings', async (req, res) => {
 app.post('/api/settings', async (req, res) => {
   const { telegramToken, telegramChatId, developerName } = req.body;
   try {
+    const oldDevName = await db.getSetting('developer_name') || '';
+
     await db.setSetting('telegram_token', telegramToken || '');
     await db.setSetting('telegram_chat_id', telegramChatId || '');
     await db.setSetting('developer_name', developerName || '');
     
     // Re-initialize bot
     await initBot(telegramToken, telegramChatId);
+
+    if (developerName !== oldDevName) {
+        // Clear reviews because the developer changed
+        db.run('DELETE FROM reviews', (err) => {
+            if (!err) {
+              // Trigger a fresh scrape in the background
+              scrapeReviews();
+            }
+        });
+    }
     
     res.json({ success: true });
   } catch (error) {
