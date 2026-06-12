@@ -9,9 +9,26 @@ const app = express();
 app.use(express.json());
 
 // Basic Auth Middleware
+const fs = require('fs');
+const path = require('path');
+const authFile = path.join(__dirname, 'data', 'auth.json');
+
 const basicAuth = (req, res, next) => {
-  const user = process.env.DASHBOARD_USER;
-  const pass = process.env.DASHBOARD_PASS;
+  let user, pass;
+  
+  if (fs.existsSync(authFile)) {
+    try {
+      const authData = JSON.parse(fs.readFileSync(authFile, 'utf8'));
+      user = authData.user;
+      pass = authData.pass;
+    } catch (e) {
+      console.error('Error reading auth.json', e);
+    }
+  }
+
+  // Fallback to env vars if not in file
+  user = user || process.env.DASHBOARD_USER;
+  pass = pass || process.env.DASHBOARD_PASS;
   
   if (!user || !pass) {
     return next();
@@ -85,14 +102,32 @@ app.get('/api/settings', async (req, res) => {
     const ascPrivateKeyRaw = await db.getSetting('asc_private_key') || '';
     const ascPrivateKey = ascPrivateKeyRaw ? '***HIDDEN***' : '';
 
-    res.json({ telegramToken: token, telegramChatId: chatId, developerName, storeCountries, apiMode, ascIssuerId, ascKeyId, ascPrivateKey });
+    let dashboardUser = process.env.DASHBOARD_USER || '';
+    let dashboardPass = process.env.DASHBOARD_PASS ? '***HIDDEN***' : '';
+    if (fs.existsSync(authFile)) {
+      try {
+        const authData = JSON.parse(fs.readFileSync(authFile, 'utf8'));
+        dashboardUser = authData.user || '';
+        dashboardPass = authData.pass ? '***HIDDEN***' : '';
+      } catch (e) {}
+    }
+
+    res.json({ telegramToken: token, telegramChatId: chatId, developerName, storeCountries, apiMode, ascIssuerId, ascKeyId, ascPrivateKey, dashboardUser, dashboardPass });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch settings' });
   }
 });
 
 app.post('/api/settings', async (req, res) => {
-  const { telegramToken, telegramChatId, developerName, storeCountries, apiMode, ascIssuerId, ascKeyId, ascPrivateKey } = req.body;
+  const { telegramToken, telegramChatId, developerName, storeCountries, apiMode, ascIssuerId, ascKeyId, ascPrivateKey, dashboardUser, dashboardPass } = req.body;
+  
+  if (dashboardUser !== undefined && dashboardPass !== undefined) {
+    if (dashboardUser && dashboardPass && dashboardPass !== '***HIDDEN***') {
+      fs.writeFileSync(authFile, JSON.stringify({ user: dashboardUser, pass: dashboardPass }), 'utf8');
+    } else if (!dashboardUser && !dashboardPass) {
+      if (fs.existsSync(authFile)) fs.unlinkSync(authFile);
+    }
+  }
   try {
     const oldDevName = await db.getSetting('developer_name') || '';
     const oldStoreCountry = await db.getSetting('store_country') || 'us';

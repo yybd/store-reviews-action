@@ -392,29 +392,32 @@ function setupSettingsModal() {
         const tabTelegram = document.getElementById('tab-telegram');
         const contentTelegram = document.getElementById('content-telegram');
 
-        if (tabPublic && tabPrivate && tabTelegram) {
-            const tabs = [
-                { btn: tabPublic, content: contentPublic, mode: 'public' },
-                { btn: tabPrivate, content: contentPrivate, mode: 'private' },
-                { btn: tabTelegram, content: contentTelegram, mode: null }
-            ];
-
-            tabs.forEach(tab => {
-                tab.btn.addEventListener('click', () => {
+        const tabs = ['public', 'private', 'telegram', 'security'];
+        tabs.forEach(tab => {
+            const btn = document.getElementById(`tab-${tab}`);
+            if(btn) {
+                btn.addEventListener('click', () => {
                     tabs.forEach(t => {
-                        t.btn.classList.remove('active');
-                        t.btn.style.color = 'var(--text-secondary)';
-                        t.btn.style.borderBottom = 'none';
-                        t.content.style.display = 'none';
+                        const tBtn = document.getElementById(`tab-${t}`);
+                        const tContent = document.getElementById(`content-${t}`);
+                        if(tBtn) {
+                            tBtn.classList.remove('active');
+                            tBtn.style.color = 'var(--text-secondary)';
+                            tBtn.style.borderBottom = 'none';
+                        }
+                        if(tContent) tContent.style.display = 'none';
                     });
-                    tab.btn.classList.add('active');
-                    tab.btn.style.color = 'var(--primary-color)';
-                    tab.btn.style.borderBottom = '2px solid var(--primary-color)';
-                    tab.content.style.display = 'block';
-                    if (tab.mode !== null) currentApiMode = tab.mode;
+                    
+                    btn.classList.add('active');
+                    btn.style.color = 'var(--primary-color)';
+                    btn.style.borderBottom = '2px solid var(--primary-color)';
+                    document.getElementById(`content-${tab}`).style.display = 'block';
+                    if (tab === 'public' || tab === 'private') {
+                        currentApiMode = tab;
+                    }
                 });
-            });
-        }
+            }
+        });
         
         try {
             const res = await fetch('/api/settings', { cache: 'no-cache' });
@@ -431,9 +434,16 @@ function setupSettingsModal() {
             if (ascKeyIdInput) ascKeyIdInput.value = data.ascKeyId || '';
             if (ascPrivateKeyInput) ascPrivateKeyInput.value = data.ascPrivateKey || '';
             
+            const dashboardUserInput = document.getElementById('dashboard-user');
+            const dashboardPassInput = document.getElementById('dashboard-pass');
+            if (dashboardUserInput) dashboardUserInput.value = data.dashboardUser || '';
+            if (dashboardPassInput) dashboardPassInput.value = data.dashboardPass || '';
+            
             if (data.apiMode === 'private') {
+                const tabPrivate = document.getElementById('tab-private');
                 if (tabPrivate) tabPrivate.click();
             } else {
+                const tabPublic = document.getElementById('tab-public');
                 if (tabPublic) tabPublic.click();
             }
             
@@ -487,6 +497,8 @@ function setupSettingsModal() {
             const ascIssuerIdInput = document.getElementById('asc-issuer-id');
             const ascKeyIdInput = document.getElementById('asc-key-id');
             const ascPrivateKeyInput = document.getElementById('asc-private-key');
+            const dashboardUserInput = document.getElementById('dashboard-user');
+            const dashboardPassInput = document.getElementById('dashboard-pass');
             
             const payload = {
                 telegramToken: tokenInput ? tokenInput.value.trim() : '',
@@ -496,7 +508,9 @@ function setupSettingsModal() {
                 apiMode: currentApiMode,
                 ascIssuerId: ascIssuerIdInput ? ascIssuerIdInput.value.trim() : '',
                 ascKeyId: ascKeyIdInput ? ascKeyIdInput.value.trim() : '',
-                ascPrivateKey: ascPrivateKeyInput ? ascPrivateKeyInput.value.trim() : ''
+                ascPrivateKey: ascPrivateKeyInput ? ascPrivateKeyInput.value.trim() : '',
+                dashboardUser: dashboardUserInput ? dashboardUserInput.value.trim() : '',
+                dashboardPass: dashboardPassInput ? dashboardPassInput.value.trim() : ''
             };
             
             const res = await fetch('/api/settings', {
