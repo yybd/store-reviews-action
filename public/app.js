@@ -1,7 +1,37 @@
 document.addEventListener('DOMContentLoaded', () => {
+    fetchConfig();
     fetchReviews();
     setupTestButton();
 });
+
+async function fetchConfig() {
+    try {
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        
+        const devNameEl = document.getElementById('developer-name-display');
+        if (devNameEl && config.developerName) {
+            devNameEl.textContent = `Tracking feedback for ${config.developerName}'s Apps`;
+        }
+        
+        const statusEl = document.getElementById('connection-status');
+        if (statusEl) {
+            statusEl.classList.remove('hidden');
+            if (config.connected) {
+                statusEl.innerHTML = `<span style="color: #4ade80;">●</span> Connected (${config.appsCount} apps found)`;
+            } else {
+                statusEl.innerHTML = `<span style="color: #ff5e5e;">●</span> Connection failed or no apps found. Check DEVELOPER_TERM.`;
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching config:', error);
+        const statusEl = document.getElementById('connection-status');
+        if (statusEl) {
+            statusEl.classList.remove('hidden');
+            statusEl.innerHTML = `<span style="color: #ff5e5e;">●</span> Failed to connect to server.`;
+        }
+    }
+}
 
 function setupTestButton() {
     const testBtn = document.getElementById('test-telegram-btn');

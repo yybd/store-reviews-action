@@ -16,6 +16,22 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
+// API endpoint for frontend config and connection status
+app.get('/api/config', async (req, res) => {
+  const { fetchDeveloperApps } = require('./scraper');
+  try {
+    const apps = await fetchDeveloperApps();
+    const developerName = process.env.DEVELOPER_TERM || 'Your Developer Name';
+    res.json({ 
+      developerName, 
+      connected: apps.length > 0,
+      appsCount: apps.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch developer config', connected: false });
+  }
+});
+
 // Test Telegram notification / Summary
 app.post('/api/send-apps-summary', async (req, res) => {
   const { sendSummaryMessage } = require('./telegram');
