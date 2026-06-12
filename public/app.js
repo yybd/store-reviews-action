@@ -276,6 +276,18 @@ async function openReviewsModal(appId, appName) {
         loadingEl.classList.add('hidden');
         
         if (reviews.length === 0) {
+            emptyEl.innerHTML = `
+                <div style="text-align: center;">
+                    <h3 style="margin-bottom: 8px;">No reviews found</h3>
+                    <p style="color: var(--text-secondary); max-width: 400px; margin: 0 auto;">
+                        There are no saved reviews for this app yet. 
+                        <br><br>
+                        <span style="font-size: 0.85rem; opacity: 0.8;">
+                            <i>Note: For massive apps (like TikTok, WhatsApp), Apple's Public RSS feeds often return empty data due to API limits. If this is your app, configure the <b>Private API</b> in Settings to bypass this limitation.</i>
+                        </span>
+                    </p>
+                </div>
+            `;
             emptyEl.classList.remove('hidden');
             return;
         }
