@@ -18,10 +18,11 @@ async function fetchDeveloperApps() {
     const appsMap = new Map();
 
     for (const storeCountry of storeCountries) {
-        try {
-            const url = `https://itunes.apple.com/search?term=${encodedTerm}&entity=macSoftware&attribute=softwareDeveloper&country=${storeCountry.trim()}`;
-            const response = await fetch(url);
-            const data = await response.json();
+        for (const entity of ['macSoftware', 'software']) {
+            try {
+                const url = `https://itunes.apple.com/search?term=${encodedTerm}&entity=${entity}&attribute=softwareDeveloper&country=${storeCountry.trim()}`;
+                const response = await fetch(url);
+                const data = await response.json();
             
             if (data.results) {
                 const searchLower = devTerm.trim().toLowerCase();
@@ -33,27 +34,45 @@ async function fetchDeveloperApps() {
                     const id = app.trackId.toString();
                     const currentRating = app.averageUserRating || 0;
                     const currentCount = app.userRatingCount || 0;
+                    const platformStr = app.kind === 'mac-software' ? 'Mac' : 'iOS/iPad';
                     
                     if (!appsMap.has(id)) {
                         appsMap.set(id, {
                             id: id,
                             name: app.trackName,
                             iconUrl: app.artworkUrl512 || app.artworkUrl100 || '',
+                            platforms: [platformStr],
                             ratingsByCountry: []
                         });
+                    } else {
+                        const existing = appsMap.get(id);
+                        if (!existing.platforms.includes(platformStr)) {
+                            existing.platforms.push(platformStr);
+                        }
                     }
                     
                     const existing = appsMap.get(id);
-                    existing.ratingsByCountry.push({
-                        country: storeCountry,
-                        rating: currentRating,
-                        count: currentCount
-                    });
+                    const existingCountryIndex = existing.ratingsByCountry.findIndex(r => r.country === storeCountry);
+                    
+                    if (existingCountryIndex === -1) {
+                        existing.ratingsByCountry.push({
+                            country: storeCountry,
+                            rating: currentRating,
+                            count: currentCount
+                        });
+                    } else {
+                        // If it exists, just update rating/count if they are 0
+                        if (existing.ratingsByCountry[existingCountryIndex].count === 0 && currentCount > 0) {
+                             existing.ratingsByCountry[existingCountryIndex].rating = currentRating;
+                             existing.ratingsByCountry[existingCountryIndex].count = currentCount;
+                        }
+                    }
                 });
             }
         } catch (err) {
             console.error(`Error fetching apps for country ${storeCountry}:`, err);
         }
+        } // close entity loop
     }
     
     return Array.from(appsMap.values());

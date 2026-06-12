@@ -144,10 +144,23 @@ async function fetchApps() {
                 statsHtml = '<div style="color: var(--text-secondary); font-size: 0.9rem;">No ratings yet</div>';
             }
             
+            let platformsHtml = '';
+            if (app.platforms && app.platforms.length > 0) {
+                platformsHtml = `<div style="display: flex; gap: 6px; margin-top: 4px;">`;
+                app.platforms.forEach(p => {
+                    const bgColor = p === 'Mac' ? 'var(--primary-color)' : '#60a5fa';
+                    platformsHtml += `<span style="background: ${bgColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 500;">${escapeHTML(p)}</span>`;
+                });
+                platformsHtml += `</div>`;
+            }
+            
             card.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
                     ${app.iconUrl ? `<img src="${app.iconUrl}" alt="${escapeHTML(app.name)} icon" style="width: 56px; height: 56px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">` : ''}
-                    <h3 style="margin: 0;">${escapeHTML(app.name)}</h3>
+                    <div>
+                        <h3 style="margin: 0;">${escapeHTML(app.name)}</h3>
+                        ${platformsHtml}
+                    </div>
                 </div>
                 <div style="margin-bottom: 12px; border-top: 1px solid var(--card-border); padding-top: 8px;">
                     ${statsHtml}
