@@ -374,12 +374,58 @@ function setupSettingsModal() {
         }
         modal.classList.remove('hidden');
         
+        const tabPublic = document.getElementById('tab-public');
+        const tabPrivate = document.getElementById('tab-private');
+        const contentPublic = document.getElementById('content-public');
+        const contentPrivate = document.getElementById('content-private');
+        
+        let currentApiMode = 'public';
+
+        if (tabPublic && tabPrivate) {
+            tabPublic.addEventListener('click', () => {
+                tabPublic.classList.add('active');
+                tabPublic.style.color = 'var(--primary-color)';
+                tabPublic.style.borderBottom = '2px solid var(--primary-color)';
+                tabPrivate.classList.remove('active');
+                tabPrivate.style.color = 'var(--text-secondary)';
+                tabPrivate.style.borderBottom = 'none';
+                contentPublic.style.display = 'block';
+                contentPrivate.style.display = 'none';
+                currentApiMode = 'public';
+            });
+            tabPrivate.addEventListener('click', () => {
+                tabPrivate.classList.add('active');
+                tabPrivate.style.color = 'var(--primary-color)';
+                tabPrivate.style.borderBottom = '2px solid var(--primary-color)';
+                tabPublic.classList.remove('active');
+                tabPublic.style.color = 'var(--text-secondary)';
+                tabPublic.style.borderBottom = 'none';
+                contentPrivate.style.display = 'block';
+                contentPublic.style.display = 'none';
+                currentApiMode = 'private';
+            });
+        }
+        
         try {
             const res = await fetch('/api/settings', { cache: 'no-cache' });
             const data = await res.json();
             if (tokenInput) tokenInput.value = data.telegramToken || '';
             if (chatIdInput) chatIdInput.value = data.telegramChatId || '';
             if (developerNameInput) developerNameInput.value = data.developerName || '';
+            
+            const ascIssuerIdInput = document.getElementById('asc-issuer-id');
+            const ascKeyIdInput = document.getElementById('asc-key-id');
+            const ascPrivateKeyInput = document.getElementById('asc-private-key');
+            
+            if (ascIssuerIdInput) ascIssuerIdInput.value = data.ascIssuerId || '';
+            if (ascKeyIdInput) ascKeyIdInput.value = data.ascKeyId || '';
+            if (ascPrivateKeyInput) ascPrivateKeyInput.value = data.ascPrivateKey || '';
+            
+            if (data.apiMode === 'private') {
+                if (tabPrivate) tabPrivate.click();
+            } else {
+                if (tabPublic) tabPublic.click();
+            }
             
             if (container) {
                 container.innerHTML = '';
@@ -417,7 +463,7 @@ function setupSettingsModal() {
         const countrySelects = Array.from(document.querySelectorAll('.store-country-select')).map(s => s.value);
         const storeCountries = [...new Set(countrySelects)];
         
-        if (storeCountries.length !== countrySelects.length) {
+        if (currentApiMode === 'public' && storeCountries.length !== countrySelects.length) {
             if (statusEl) {
                 statusEl.textContent = 'Please do not select the same App Store region more than once.';
                 statusEl.style.color = '#ff5e5e';
@@ -428,15 +474,25 @@ function setupSettingsModal() {
         }
 
         try {
+            const ascIssuerIdInput = document.getElementById('asc-issuer-id');
+            const ascKeyIdInput = document.getElementById('asc-key-id');
+            const ascPrivateKeyInput = document.getElementById('asc-private-key');
+            
+            const payload = {
+                telegramToken: tokenInput ? tokenInput.value.trim() : '',
+                telegramChatId: chatIdInput ? chatIdInput.value.trim() : '',
+                developerName: developerNameInput ? developerNameInput.value.trim() : '',
+                storeCountries: storeCountries,
+                apiMode: currentApiMode,
+                ascIssuerId: ascIssuerIdInput ? ascIssuerIdInput.value.trim() : '',
+                ascKeyId: ascKeyIdInput ? ascKeyIdInput.value.trim() : '',
+                ascPrivateKey: ascPrivateKeyInput ? ascPrivateKeyInput.value.trim() : ''
+            };
+            
             const res = await fetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    telegramToken: tokenInput ? tokenInput.value.trim() : '',
-                    telegramChatId: chatIdInput ? chatIdInput.value.trim() : '',
-                    developerName: developerNameInput ? developerNameInput.value.trim() : '',
-                    storeCountries: storeCountries
-                })
+                body: JSON.stringify(payload)
             });
             
             const data = await res.json();

@@ -55,17 +55,25 @@ app.get('/api/settings', async (req, res) => {
     const developerName = await db.getSetting('developer_name') || process.env.DEVELOPER_TERM || '';
     const storeCountryStr = await db.getSetting('store_country') || process.env.STORE_COUNTRY || 'us';
     const storeCountries = storeCountryStr.split(',');
-    res.json({ telegramToken: token, telegramChatId: chatId, developerName, storeCountries });
+    
+    const apiMode = await db.getSetting('api_mode') || 'public';
+    const ascIssuerId = await db.getSetting('asc_issuer_id') || '';
+    const ascKeyId = await db.getSetting('asc_key_id') || '';
+    const ascPrivateKeyRaw = await db.getSetting('asc_private_key') || '';
+    const ascPrivateKey = ascPrivateKeyRaw ? '***HIDDEN***' : '';
+
+    res.json({ telegramToken: token, telegramChatId: chatId, developerName, storeCountries, apiMode, ascIssuerId, ascKeyId, ascPrivateKey });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch settings' });
   }
 });
 
 app.post('/api/settings', async (req, res) => {
-  const { telegramToken, telegramChatId, developerName, storeCountries } = req.body;
+  const { telegramToken, telegramChatId, developerName, storeCountries, apiMode, ascIssuerId, ascKeyId, ascPrivateKey } = req.body;
   try {
     const oldDevName = await db.getSetting('developer_name') || '';
     const oldStoreCountry = await db.getSetting('store_country') || 'us';
+    const oldApiMode = await db.getSetting('api_mode') || 'public';
 
     const storeCountryStr = Array.isArray(storeCountries) ? storeCountries.join(',') : 'us';
 
@@ -74,11 +82,19 @@ app.post('/api/settings', async (req, res) => {
     await db.setSetting('developer_name', developerName || '');
     await db.setSetting('store_country', storeCountryStr);
     
+    await db.setSetting('api_mode', apiMode || 'public');
+    await db.setSetting('asc_issuer_id', ascIssuerId || '');
+    await db.setSetting('asc_key_id', ascKeyId || '');
+    
+    if (ascPrivateKey && ascPrivateKey !== '***HIDDEN***') {
+      await db.setSetting('asc_private_key', ascPrivateKey);
+    }
+    
     // Re-initialize bot
     await initBot(telegramToken, telegramChatId);
 
-    if (developerName !== oldDevName || storeCountryStr !== oldStoreCountry) {
-        // Clear reviews because the developer or country changed
+    if (developerName !== oldDevName || storeCountryStr !== oldStoreCountry || apiMode !== oldApiMode) {
+        // Clear reviews because the developer, country or api mode changed
         db.run('DELETE FROM reviews', (err) => {
             if (!err) {
               // Trigger a fresh scrape in the background without sending initial notifications

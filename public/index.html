@@ -59,20 +59,46 @@
                 <h2>Settings</h2>
                 <button id="close-settings-btn" class="close-btn">&times;</button>
             </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label for="developer-name">Developer Name</label>
-                    <input type="text" id="developer-name" placeholder="e.g. John Doe">
+        <div class="modal-body">
+                <div class="api-tabs" style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--card-border); padding-bottom: 8px;">
+                    <button type="button" id="tab-public" class="tab-btn active" style="background: none; border: none; padding: 8px 12px; cursor: pointer; font-weight: 500; color: var(--primary-color); border-bottom: 2px solid var(--primary-color);">Public API (RSS)</button>
+                    <button type="button" id="tab-private" class="tab-btn" style="background: none; border: none; padding: 8px 12px; cursor: pointer; font-weight: 500; color: var(--text-secondary);">Private API (Connect)</button>
                 </div>
 
-                <div class="form-group">
-                    <label>App Store Regions</label>
-                    <div id="store-countries-container" style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
-                        <!-- Dynamic selects will be injected here -->
+                <!-- Public API Tab Content -->
+                <div id="content-public" class="tab-content">
+                    <div class="form-group">
+                        <label for="developer-name">Developer Name</label>
+                        <input type="text" id="developer-name" placeholder="e.g. John Doe">
                     </div>
-                    <button type="button" id="add-store-btn" style="margin-top: 8px; background: none; border: 1px dashed var(--card-border); color: var(--text-secondary); padding: 8px 12px; border-radius: 6px; cursor: pointer; width: 100%; transition: all 0.2s;">
-                        + Add Store Region
-                    </button>
+                    <div class="form-group">
+                        <label>App Store Regions</label>
+                        <div id="store-countries-container" style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
+                            <!-- Dynamic selects will be injected here -->
+                        </div>
+                        <button type="button" id="add-store-btn" style="margin-top: 8px; background: none; border: 1px dashed var(--card-border); color: var(--text-secondary); padding: 8px 12px; border-radius: 6px; cursor: pointer; width: 100%; transition: all 0.2s;">
+                            + Add Store Region
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Private API Tab Content -->
+                <div id="content-private" class="tab-content hidden" style="display: none;">
+                    <p style="margin-top: 0; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 16px;">
+                        Use App Store Connect API to automatically fetch reviews globally across all regions without manual configuration.
+                    </p>
+                    <div class="form-group">
+                        <label for="asc-issuer-id">Issuer ID</label>
+                        <input type="text" id="asc-issuer-id" placeholder="e.g. 69a6de7a-...">
+                    </div>
+                    <div class="form-group">
+                        <label for="asc-key-id">Key ID</label>
+                        <input type="text" id="asc-key-id" placeholder="e.g. 2X9Y...">
+                    </div>
+                    <div class="form-group">
+                        <label for="asc-private-key">Private Key (.p8 contents)</label>
+                        <textarea id="asc-private-key" placeholder="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-primary); color: var(--text-primary); font-family: monospace; resize: vertical; min-height: 100px;"></textarea>
+                    </div>
                 </div>
                 
                 <h3 style="margin-top: 24px; margin-bottom: 8px; font-size: 1.1rem; border-bottom: 1px solid var(--card-border); padding-bottom: 8px;">Telegram Settings</h3>
