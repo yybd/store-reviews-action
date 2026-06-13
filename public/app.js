@@ -312,6 +312,7 @@ async function fetchApps() {
                 <div style="margin-bottom: 12px; border-top: 1px solid var(--card-border); padding-top: 8px;">
                     ${statsHtml}
                 </div>
+                <div class="app-downloads-row" id="downloads-${escapeHTML(app.id)}" style="display: none; font-size: 0.9rem; margin-bottom: 12px; padding: 8px 10px; background: rgba(127,127,127,0.08); border-radius: 8px;"></div>
                 <button class="view-reviews-btn" data-id="${escapeHTML(app.id)}" data-name="${escapeHTML(app.name)}">View Reviews</button>
             `;
             
@@ -326,6 +327,10 @@ async function fetchApps() {
         
         gridEl.classList.remove('hidden');
 
+        // Download counts arrive separately (Private API only, best-effort) so the
+        // grid never waits on the slower sales-report fetch.
+        fetchDownloads();
+
     } catch (error) {
         console.error('Error fetching apps:', error);
         // When auth is required the login modal is already shown; the post-login
@@ -333,6 +338,31 @@ async function fetchApps() {
         if (error.message === 'Authentication required') return;
         loadingEl.innerHTML = `<p style="color: #ff5e5e;">Error loading apps. Retrying soon...</p>`;
         setTimeout(fetchApps, 10000);
+    }
+}
+
+// Fill in each card's download figure (Private API only). Best-effort: if the
+// data source isn't available (Public mode, no Vendor Number, or a key without
+// Sales access) the rows simply stay hidden — no error is surfaced to the user.
+async function fetchDownloads() {
+    try {
+        const response = await customFetch('/api/downloads', { cache: 'no-cache' });
+        if (!response.ok) return;
+
+        const data = await response.json();
+        if (!data || !data.available || !data.downloads) return;
+
+        const period = data.periodDays || 30;
+        Object.entries(data.downloads).forEach(([appId, count]) => {
+            const el = document.getElementById('downloads-' + appId);
+            if (!el) return;
+            el.innerHTML = `<span title="First-time downloads in the last ${period} days, via App Store Connect sales reports">⬇️ <strong>${Number(count).toLocaleString()}</strong> downloads <span style="color: var(--text-secondary); font-weight: 400;">· ${period}d</span></span>`;
+            el.style.display = 'block';
+        });
+    } catch (error) {
+        // Best-effort enrichment; the dashboard works fine without it.
+        if (error.message === 'Authentication required') return;
+        console.error('Error fetching downloads:', error);
     }
 }
 
@@ -677,10 +707,12 @@ function setupSettingsModal() {
             
             const ascIssuerIdInput = document.getElementById('asc-issuer-id');
             const ascKeyIdInput = document.getElementById('asc-key-id');
+            const ascVendorNumberInput = document.getElementById('asc-vendor-number');
             const ascPrivateKeyInput = document.getElementById('asc-private-key');
-            
+
             if (ascIssuerIdInput) ascIssuerIdInput.value = data.ascIssuerId || '';
             if (ascKeyIdInput) ascKeyIdInput.value = data.ascKeyId || '';
+            if (ascVendorNumberInput) ascVendorNumberInput.value = data.ascVendorNumber || '';
             if (ascPrivateKeyInput) ascPrivateKeyInput.value = data.ascPrivateKey || '';
             
             const dashboardUserInput = document.getElementById('dashboard-user');
@@ -760,6 +792,7 @@ function setupSettingsModal() {
         try {
             const ascIssuerIdInput = document.getElementById('asc-issuer-id');
             const ascKeyIdInput = document.getElementById('asc-key-id');
+            const ascVendorNumberInput = document.getElementById('asc-vendor-number');
             const ascPrivateKeyInput = document.getElementById('asc-private-key');
             const dashboardUserInput = document.getElementById('dashboard-user');
             const dashboardPassInput = document.getElementById('dashboard-pass');
@@ -773,6 +806,7 @@ function setupSettingsModal() {
                 apiMode: currentApiMode,
                 ascIssuerId: ascIssuerIdInput ? ascIssuerIdInput.value.trim() : '',
                 ascKeyId: ascKeyIdInput ? ascKeyIdInput.value.trim() : '',
+                ascVendorNumber: ascVendorNumberInput ? ascVendorNumberInput.value.trim() : '',
                 ascPrivateKey: ascPrivateKeyInput ? ascPrivateKeyInput.value.trim() : '',
                 dashboardUser: dashboardUserInput ? dashboardUserInput.value.trim() : '',
                 dashboardPass: dashboardPassInput ? dashboardPassInput.value.trim() : '',

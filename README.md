@@ -1,8 +1,8 @@
-# App Store (Apple) Reviews Action & Telegram Bot
+# App Store (Apple) Reviews & Downloads Action + Telegram Bot
 
-This project is a complete **Web Dashboard and Telegram Bot** designed to track Mac/iOS App Store reviews for a specific developer. It automatically scrapes Apple's servers for your apps, stores reviews in a local database (SQLite), provides a beautiful Web Dashboard, and keeps you updated via Telegram notifications.
+This project is a complete **Web Dashboard and Telegram Bot** designed to track Mac/iOS App Store **reviews and downloads** for a specific developer. It automatically scrapes Apple's servers for your apps, stores reviews in a local database (SQLite), provides a beautiful Web Dashboard, and keeps you updated via Telegram notifications. With the optional **Private API** + Vendor Number, it also reports each app's **first-time downloads from the last 30 days** — shown both on the dashboard and in the Telegram summary.
 
-![Dashboard Overview](Screenshot/screenshot1.png)
+
 
 ## Data Fetching: 2 Options
 
@@ -17,7 +17,7 @@ This method uses Apple's public iTunes Search and RSS feeds.
 
 ### 2. Private API (App Store Connect)
 This method connects directly to your Apple Developer account securely.
-- **Pros**: Automatically fetches reviews across **all global regions** without manual configuration. Also displays tags for apps that are not yet live in the store.
+- **Pros**: Automatically fetches reviews across **all global regions** without manual configuration. Also displays tags for apps that are not yet live in the store, and can show **30-day download counts** per app (requires a Vendor Number and a key with sales access — see below).
 - **Cons**: Requires generating an API key from your Apple Developer account.
 - **Setup**: See instructions below on how to obtain your API key.
 
@@ -33,6 +33,13 @@ To use the Private API, you need to generate an API key from App Store Connect:
 6. Note the **Issuer ID** at the top of the page, and the **Key ID** next to your new key.
 7. Click **Download API Key** to download the `.p8` file.
 8. Open the `.p8` file in any text editor, and copy its entire contents (including the `BEGIN PRIVATE KEY` lines) into the Web Dashboard settings.
+
+#### (Optional) Enable download counts
+The dashboard can additionally show **first-time downloads over the last 30 days** on each app card, pulled from App Store Connect Sales Reports. This requires two things:
+1. **A Vendor Number** — find it in App Store Connect under **Payments and Financial Reports** (shown next to your team name), and paste it into the **Vendor Number** field on the Private API settings tab.
+2. **A key with sales access** — the API key's role must be **Admin**, **Finance**, or **Sales**. A key with only **App Manager**/**Developer** access can read reviews but will get a permission error for sales reports, so the download line simply won't appear.
+
+> Note: download figures are not real-time — Apple's sales data lags by about a day, and there is no same-day report.
 
 ---
 
@@ -53,7 +60,7 @@ The system runs silently in the background, checking the App Store at regular in
 ### 2. 📊 On-Demand Summaries (Manual)
 If you want to quickly check the current status of your apps without waiting for a new review, you can manually request a summary:
 - **How to trigger**: Click the "Send Summary" button on the Web Dashboard, or simply type `/apps` in your Telegram chat with the bot.
-- **What you get**: The bot will reply with a clean summary listing all your apps, their average ratings, and total review counts.
+- **What you get**: The bot will reply with a clean summary listing all your apps, their average ratings, and total review counts — plus each app's **30-day download count** when using the Private API with a Vendor Number configured.
 - **Interactive Buttons**: Below the summary, the bot attaches inline buttons for each app. Clicking an app's button will instantly reply with its **last 5 reviews**.
 
 ---
@@ -61,7 +68,7 @@ If you want to quickly check the current status of your apps without waiting for
 ## 💻 Web Dashboard
 
 The project includes a sleek, modern web interface accessible from your browser (e.g., `http://localhost:3000`).
-- **Apps Grid**: Displays a card for each of your apps, showing its icon, name, average rating, and total review count.
+- **Apps Grid**: Displays a card for each of your apps, showing its icon, name, average rating, and total review count — plus a 30-day download count when using the Private API with a Vendor Number configured.
 - **Reviews Modal**: Click on any app to open a scrollable window containing all its saved reviews.
 - **In-Browser Settings**: A built-in Settings modal allows you to configure your APIs and Telegram Bot securely from the UI.
 - **Security & Authentication**: You can secure your dashboard with a custom username and password from the "Security" tab in the Settings. When enabled, a beautifully integrated Login Modal prevents unauthorized access to your dashboard and APIs.

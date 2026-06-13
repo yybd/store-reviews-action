@@ -3,7 +3,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const db = require('./db');
-const { scrapeReviews, resetAndRescrape, fetchDeveloperApps, getDeveloperDisplayName, testAscCredentials, scraperEvents } = require('./scraper');
+const { scrapeReviews, resetAndRescrape, fetchDeveloperApps, getDeveloperDisplayName, testAscCredentials, fetchDownloadsPrivate, invalidateDownloadsCache, scraperEvents } = require('./scraper');
 const { initBot, isBotConnected } = require('./telegram');
 
 const app = express();
@@ -173,6 +173,7 @@ app.get('/api/settings', async (req, res) => {
     const apiMode = await db.getSetting('api_mode') || 'public';
     const ascIssuerId = await db.getSetting('asc_issuer_id') || '';
     const ascKeyId = await db.getSetting('asc_key_id') || '';
+    const ascVendorNumber = await db.getSetting('asc_vendor_number') || '';
     const ascPrivateKeyRaw = await db.getSetting('asc_private_key') || '';
     const ascPrivateKey = ascPrivateKeyRaw ? HIDDEN : '';
 
@@ -193,6 +194,7 @@ app.get('/api/settings', async (req, res) => {
       apiMode,
       ascIssuerId,
       ascKeyId,
+      ascVendorNumber,
       ascPrivateKey,
       dashboardUser,
       dashboardPass,
@@ -218,7 +220,7 @@ const normalizePrivateKey = (rawKey) => {
 };
 
 app.post('/api/settings', async (req, res) => {
-  const { telegramToken, telegramChatId, developerName, storeCountries, apiMode, ascIssuerId, ascKeyId, ascPrivateKey, dashboardUser, dashboardPass, pollIntervalMinutes } = req.body;
+  const { telegramToken, telegramChatId, developerName, storeCountries, apiMode, ascIssuerId, ascKeyId, ascVendorNumber, ascPrivateKey, dashboardUser, dashboardPass, pollIntervalMinutes } = req.body;
 
   try {
     // Load current values: needed to resolve "keep current" sentinels and to detect changes
@@ -227,6 +229,7 @@ app.post('/api/settings', async (req, res) => {
     const oldApiMode = await db.getSetting('api_mode') || 'public';
     const oldAscIssuerId = await db.getSetting('asc_issuer_id') || '';
     const oldAscKeyId = await db.getSetting('asc_key_id') || '';
+    const oldAscVendorNumber = await db.getSetting('asc_vendor_number') || '';
     const oldAscKey = await db.getSetting('asc_private_key') || '';
     const oldTelegramToken = (await db.getSetting('telegram_token')) || process.env.TELEGRAM_BOT_TOKEN || '';
     const oldTelegramChatId = (await db.getSetting('telegram_chat_id')) || process.env.TELEGRAM_CHAT_ID || '';
@@ -237,6 +240,7 @@ app.post('/api/settings', async (req, res) => {
     const newTelegramChatId = (telegramChatId || '').trim();
     const newAscIssuerId = (ascIssuerId || '').trim();
     const newAscKeyId = (ascKeyId || '').trim();
+    const newAscVendorNumber = (ascVendorNumber || '').trim();
 
     const storeCountryStr = Array.isArray(storeCountries)
       ? [...new Set(storeCountries.map(c => String(c).trim().toLowerCase()).filter(Boolean))].join(',') || 'us'
@@ -300,6 +304,7 @@ app.post('/api/settings', async (req, res) => {
     await db.setSetting('api_mode', newApiMode);
     await db.setSetting('asc_issuer_id', newAscIssuerId);
     await db.setSetting('asc_key_id', newAscKeyId);
+    await db.setSetting('asc_vendor_number', newAscVendorNumber);
     await db.setSetting('asc_private_key', newAscKey);
 
     if (newPollInterval !== null) {
@@ -321,6 +326,14 @@ app.post('/api/settings', async (req, res) => {
       (newAscIssuerId !== oldAscIssuerId || newAscKeyId !== oldAscKeyId || newAscKey !== oldAscKey);
     if (newDevName !== oldDevName || storeCountryStr !== oldStoreCountry || newApiMode !== oldApiMode || ascCredsChanged) {
       resetAndRescrape().catch(err => console.error('Reset & rescrape failed:', err));
+    }
+
+    // Downloads are derived separately from reviews, so don't trigger a rescrape —
+    // just drop the cached figures so the next dashboard load refetches them. Done
+    // on any private-mode save so the user can also force a refresh (e.g. after
+    // fixing the key's role or correcting the vendor number) by re-saving.
+    if (newApiMode === 'private' || newAscVendorNumber !== oldAscVendorNumber) {
+      invalidateDownloadsCache();
     }
 
     res.json({ success: true });
@@ -395,6 +408,19 @@ app.get('/api/apps', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to retrieve apps' });
+  }
+});
+
+// API endpoint for per-app download counts (Private API only; see fetchDownloadsPrivate).
+// Returns { available, periodDays, downloads: { appId: count } }. The dashboard
+// fetches this separately from /api/apps so the cards render immediately and the
+// figures fill in once the (cached) sales reports resolve.
+app.get('/api/downloads', async (req, res) => {
+  try {
+    res.json(await fetchDownloadsPrivate());
+  } catch (err) {
+    console.error('Error fetching downloads:', err);
+    res.status(500).json({ available: false, periodDays: 30, downloads: {} });
   }
 });
 

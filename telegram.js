@@ -144,25 +144,57 @@ const sendReviewNotification = async (review, appName, iconUrl, countryCode) => 
   }
 };
 
-const sendSummaryMessage = async (apps) => {
-  if (!bot || !activeChatId) return false;
+// Pure builder for the summary text + inline keyboard (no bot I/O), so it can be
+// unit-tested. `downloadsInfo` is the shape returned by fetchDownloadsPrivate():
+// { available, periodDays, downloads: { appId: count } }. The download line is
+// added only when downloads are available and the app has a count.
+const buildAppsSummary = (apps, downloadsInfo = {}) => {
+  const downloads = downloadsInfo.downloads || {};
+  const downloadsAvailable = !!downloadsInfo.available;
+  const downloadsPeriod = downloadsInfo.periodDays || 30;
 
   let message = `<b>Apps Rating Summary</b>\n\n`;
   const keyboard = [];
 
-  if (apps.length === 0) {
+  if (!apps || apps.length === 0) {
     message += `No apps found.`;
-  } else {
-    apps.forEach(app => {
-      const ratings = app.ratingsByCountry || [];
-      const totalCount = ratings.reduce((sum, r) => sum + r.count, 0);
-      const totalRatingPoints = ratings.reduce((sum, r) => sum + (r.rating * r.count), 0);
-      const avgRating = totalCount > 0 ? (totalRatingPoints / totalCount).toFixed(1) : '0.0';
-      const unpublishedTag = app.isPublished === false ? ' [Not in Store]' : '';
-      message += `<b>${escapeHtml(app.name)}</b>${escapeHtml(unpublishedTag)}\nRating: ${avgRating}/5 (${totalCount} reviews)\n\n`;
-      keyboard.push([{ text: `View Reviews: ${app.name}`, callback_data: `app_${app.id}` }]);
-    });
+    return { message, keyboard };
   }
+
+  apps.forEach(app => {
+    const ratings = app.ratingsByCountry || [];
+    const totalCount = ratings.reduce((sum, r) => sum + r.count, 0);
+    const totalRatingPoints = ratings.reduce((sum, r) => sum + (r.rating * r.count), 0);
+    const avgRating = totalCount > 0 ? (totalRatingPoints / totalCount).toFixed(1) : '0.0';
+    const unpublishedTag = app.isPublished === false ? ' [Not in Store]' : '';
+    message += `<b>${escapeHtml(app.name)}</b>${escapeHtml(unpublishedTag)}\nRating: ${avgRating}/5 (${totalCount} reviews)\n`;
+    const dlCount = downloads[app.id];
+    if (downloadsAvailable && typeof dlCount === 'number') {
+      message += `Downloads: ${dlCount.toLocaleString()} (last ${downloadsPeriod}d)\n`;
+    }
+    message += `\n`;
+    keyboard.push([{ text: `View Reviews: ${app.name}`, callback_data: `app_${app.id}` }]);
+  });
+
+  return { message, keyboard };
+};
+
+const sendSummaryMessage = async (apps) => {
+  if (!bot || !activeChatId) return false;
+
+  // Download counts are Private-API only and best-effort: stays empty/unavailable
+  // in Public mode, without a Vendor Number, or if the key lacks sales access — in
+  // which case the summary simply omits the download line. Required lazily to avoid
+  // a load-time circular dependency with scraper.js.
+  let downloadsInfo = {};
+  try {
+    const { fetchDownloadsPrivate } = require('./scraper');
+    downloadsInfo = await fetchDownloadsPrivate();
+  } catch (e) {
+    console.error('Error fetching downloads for summary:', e.message || e);
+  }
+
+  const { message, keyboard } = buildAppsSummary(apps, downloadsInfo);
 
   try {
     await bot.sendMessage(activeChatId, message, {
@@ -181,4 +213,4 @@ const sendSummaryMessage = async (apps) => {
 
 const isBotConnected = () => !!bot;
 
-module.exports = { initBot, isBotConnected, sendReviewNotification, sendSummaryMessage };
+module.exports = { initBot, isBotConnected, sendReviewNotification, sendSummaryMessage, buildAppsSummary };

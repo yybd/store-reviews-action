@@ -115,8 +115,24 @@
                             If a key is already saved it appears as <code>***HIDDEN***</code> — leave it unchanged to keep using the saved key, or paste a new one to replace it.
                         </div>
                     </div>
+                    <div class="form-group">
+                        <label for="asc-vendor-number">Vendor Number <span style="font-weight: 400; color: var(--text-secondary);">(optional)</span></label>
+                        <input type="text" id="asc-vendor-number" placeholder="e.g. 87654321">
+                    </div>
+                    <div class="telegram-instructions">
+                        <strong>📥 Show download counts (optional)</strong><br>
+                        Leave this empty to keep everything exactly as it is now — only reviews are tracked. Add your <strong>Vendor Number</strong> to also show <strong>first-time downloads from the last 30 days</strong> on each app card.<br><br>
+                        <strong>🔑 Required access level:</strong> the App Store Connect key configured above must have an <strong>Admin</strong>, <strong>Finance</strong>, or <strong>Sales</strong> role. A <strong>Developer</strong> or <strong>App Manager</strong> key still works for reviews, but cannot read sales reports — so downloads simply won't appear (nothing else breaks).<br><br>
+                        <strong>🔎 How to find your Vendor Number:</strong>
+                        <ol style="margin: 8px 0 0; padding-left: 20px;">
+                            <li>Sign in to <a href="https://appstoreconnect.apple.com/" target="_blank" rel="noopener" style="color: var(--accent);">App Store Connect</a>.</li>
+                            <li>Open <strong>Payments and Financial Reports</strong> from the main menu.</li>
+                            <li>Your <strong>Vendor Number</strong> — an 8-digit number — is shown at the top-left, next to your legal entity / team name.</li>
+                        </ol>
+                        <div style="margin-top: 10px; opacity: 0.85;">Note: Apple's sales data lags about a day, so figures won't include today.</div>
+                    </div>
                 </div>
-                
+
                 <!-- Telegram Tab Content -->
                 <div id="content-telegram" class="tab-content" style="display: none;">
                     <p style="margin-top: 0; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 16px;">

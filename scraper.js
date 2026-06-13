@@ -2,6 +2,7 @@ const db = require('./db');
 const { sendReviewNotification } = require('./telegram');
 const jwt = require('jsonwebtoken');
 const { EventEmitter } = require('events');
+const zlib = require('zlib');
 
 // Emits 'reviews-updated' whenever a scrape cycle saved new reviews, so the
 // server can push a live refresh to open dashboards (instead of them polling)
@@ -184,6 +185,156 @@ async function fetchDeveloperAppsPrivate() {
         console.error('Error in fetchDeveloperAppsPrivate:', e);
         return [];
     }
+}
+
+// --- Download counts (App Store Connect Sales Reports) -----------------------
+// Download numbers are Private-API only: Apple exposes none in any public feed.
+// We sum the last 30 DAILY "SALES / SUMMARY" reports, counting first-time
+// installs only (Product Type Identifier starting with '1' for iOS or 'F1' for
+// Mac — updates '7*' and in-app purchases '3*'/'IA*' are excluded), keyed by the
+// report's "Apple Identifier" column, which equals our app.id. Each report is a
+// gzipped TSV (decompressed with Node's built-in zlib). Cached for hours because
+// the underlying data only refreshes about once a day.
+const DOWNLOADS_PERIOD_DAYS = 30;
+const DOWNLOADS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+let downloadsCache = { key: null, data: null, fetchedAt: 0 };
+
+function invalidateDownloadsCache() {
+    downloadsCache = { key: null, data: null, fetchedAt: 0 };
+}
+
+// Is this sales-report row a first-time app download (not an update or IAP)?
+function isFirstDownloadProductType(pti) {
+    if (!pti) return false;
+    const t = String(pti).trim().toUpperCase();
+    // iOS first installs: 1, 1F, 1T, 1E, 1-B …   Mac first install: F1
+    return t.startsWith('1') || t.startsWith('F1');
+}
+
+// Parse a decompressed SALES SUMMARY report (tab-separated) into { appId: units },
+// summing only first-time-download rows. Columns are located by header name so a
+// change in column order (or report version) doesn't break it. Pure (no I/O) so
+// it can be unit-tested directly.
+function parseSalesReportTsv(tsv) {
+    const counts = {};
+    const lines = String(tsv || '').split('\n').filter(Boolean);
+    if (lines.length < 2) return counts;
+
+    const header = lines[0].split('\t');
+    const unitsIdx = header.indexOf('Units');
+    const appleIdIdx = header.indexOf('Apple Identifier');
+    const ptiIdx = header.indexOf('Product Type Identifier');
+    if (unitsIdx === -1 || appleIdIdx === -1 || ptiIdx === -1) return counts;
+
+    for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split('\t');
+        if (!isFirstDownloadProductType(cols[ptiIdx])) continue;
+        const appleId = (cols[appleIdIdx] || '').trim();
+        const units = parseInt(cols[unitsIdx], 10);
+        if (!appleId || !Number.isFinite(units)) continue;
+        counts[appleId] = (counts[appleId] || 0) + units;
+    }
+    return counts;
+}
+
+// Fetch + parse one DAILY SALES SUMMARY report. Returns { reached, authOk, counts }:
+//  - reached:false → never got an HTTP response (network error) → don't cache, retry soon
+//  - authOk:false  → 401/403, i.e. the key lacks Sales/Finance/Admin access
+//  - 404           → no report for that day (not ready yet, or zero sales) → empty but fine
+async function fetchDailySalesReport(token, vendorNumber, reportDate) {
+    const params = new URLSearchParams({
+        'filter[frequency]': 'DAILY',
+        'filter[reportType]': 'SALES',
+        'filter[reportSubType]': 'SUMMARY',
+        'filter[vendorNumber]': vendorNumber,
+        'filter[version]': '1_0',
+        'filter[reportDate]': reportDate
+    });
+    const url = `https://api.appstoreconnect.apple.com/v1/salesReports?${params.toString()}`;
+
+    let response;
+    try {
+        response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/a-gzip' }
+        });
+    } catch (e) {
+        console.error(`Sales report ${reportDate} network error:`, e.message);
+        return { reached: false, authOk: false, counts: {} };
+    }
+
+    if (response.status === 404) return { reached: true, authOk: true, counts: {} };
+    if (response.status === 401 || response.status === 403) {
+        console.error(`Sales report ${reportDate}: ${response.status} — the API key likely lacks Sales/Finance/Admin access`);
+        return { reached: true, authOk: false, counts: {} };
+    }
+    if (!response.ok) {
+        console.error(`Sales report ${reportDate} failed: ${response.status} ${response.statusText}`);
+        return { reached: true, authOk: true, counts: {} };
+    }
+
+    let tsv;
+    try {
+        const buf = Buffer.from(await response.arrayBuffer());
+        tsv = zlib.gunzipSync(buf).toString('utf8');
+    } catch (e) {
+        console.error(`Failed to read sales report ${reportDate}:`, e.message);
+        return { reached: true, authOk: true, counts: {} };
+    }
+
+    return { reached: true, authOk: true, counts: parseSalesReportTsv(tsv) };
+}
+
+// Total first-time downloads per app over the last DOWNLOADS_PERIOD_DAYS days.
+// Returns { available, periodDays, downloads: { appId: count } }. `available` is
+// false (so the dashboard simply omits the figure) when not in private mode, when
+// no Vendor Number is set, or when the key can't read sales reports.
+async function fetchDownloadsPrivate() {
+    const empty = { available: false, periodDays: DOWNLOADS_PERIOD_DAYS, downloads: {} };
+
+    const apiMode = await db.getSetting('api_mode') || 'public';
+    if (apiMode !== 'private') return empty;
+
+    const vendorNumber = (await db.getSetting('asc_vendor_number') || '').trim();
+    if (!vendorNumber) return empty;
+
+    const keyId = await db.getSetting('asc_key_id') || '';
+    const issuerId = await db.getSetting('asc_issuer_id') || '';
+    const cacheKey = JSON.stringify([vendorNumber, keyId, issuerId]);
+    if (downloadsCache.key === cacheKey && downloadsCache.data && (Date.now() - downloadsCache.fetchedAt) < DOWNLOADS_CACHE_TTL_MS) {
+        return downloadsCache.data;
+    }
+
+    const token = await generateAscToken();
+    if (!token) return empty;
+
+    // The most recent daily report lags ~1 day, so sum yesterday back 30 days.
+    const base = Date.now();
+    const dates = [];
+    for (let i = 1; i <= DOWNLOADS_PERIOD_DAYS; i++) {
+        dates.push(new Date(base - i * 86400000).toISOString().slice(0, 10));
+    }
+
+    const perDay = await Promise.all(
+        dates.map(d => fetchDailySalesReport(token, vendorNumber, d))
+    );
+
+    const totals = {};
+    for (const { counts } of perDay) {
+        for (const [appId, units] of Object.entries(counts)) {
+            totals[appId] = (totals[appId] || 0) + units;
+        }
+    }
+
+    const reached = perDay.some(r => r.reached);   // got at least one HTTP response
+    const available = perDay.some(r => r.authOk);  // …and at least one usable (auth OK)
+    const result = { available, periodDays: DOWNLOADS_PERIOD_DAYS, downloads: totals };
+
+    // Cache definitive results (including a 403 "no access", so we don't re-hammer
+    // Apple on every dashboard refresh) but not a total network outage.
+    if (reached) {
+        downloadsCache = { key: cacheKey, data: result, fetchedAt: Date.now() };
+    }
+    return result;
 }
 
 async function scrapeReviewsPrivate(isInitial = false) {
@@ -497,4 +648,4 @@ async function doScrape(isInitial) {
     }
 }
 
-module.exports = { scrapeReviews, resetAndRescrape, fetchDeveloperApps, getDeveloperDisplayName, fetchAppReviews, testAscCredentials, scraperEvents };
+module.exports = { scrapeReviews, resetAndRescrape, fetchDeveloperApps, getDeveloperDisplayName, fetchAppReviews, testAscCredentials, fetchDownloadsPrivate, invalidateDownloadsCache, parseSalesReportTsv, isFirstDownloadProductType, scraperEvents };
