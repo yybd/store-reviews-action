@@ -256,8 +256,12 @@ function setupLogoutButton() {
 function setupTestButton() {
     const testBtn = document.getElementById('test-telegram-btn');
     if (!testBtn) return;
-    
-        testBtn.addEventListener('click', async () => {
+
+    // Lock the button to its natural "Send Summary" width so it keeps a constant
+    // size when the label briefly changes (Sending… / Sent! / Failed / Error)
+    if (testBtn.offsetWidth) testBtn.style.minWidth = testBtn.offsetWidth + 'px';
+
+    testBtn.addEventListener('click', async () => {
         const originalText = testBtn.textContent;
         testBtn.textContent = 'Sending...';
         testBtn.disabled = true;
